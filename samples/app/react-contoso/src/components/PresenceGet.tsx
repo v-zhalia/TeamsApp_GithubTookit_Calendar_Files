@@ -1,8 +1,9 @@
-import { Person,Get, MgtTemplateProps} from '@microsoft/mgt-react';
+import * as React from 'react';
+import { Person} from '@microsoft/mgt-react';
 import {Presence} from '@microsoft/microsoft-graph-types';
 import { PresenceAvailable16Filled, PresenceDnd16Filled,PresenceBusy16Filled, PresenceAway16Filled, PresenceOffline16Regular ,ChevronRight16Filled} from '@fluentui/react-icons';
 import { makeStyles,Menu,MenuItem, MenuList, MenuPopover, MenuTrigger } from '@fluentui/react-components';
-import { updatePreferredPresence,Availability, Activity } from '../services/graphPresenceService';
+import { updatePreferredPresence,getPresence,Availability, Activity } from '../services/graphPresenceService';
 
 const useStyles = makeStyles({
     simpleLogin: {
@@ -63,14 +64,55 @@ const useStyles = makeStyles({
         cursor: "pointer",
       },
 });
-export const PresenceGet: React.FunctionComponent<{ container: string }> = ({ container }) => {
+export const PresenceGet: React.FunctionComponent<{ container: string,userId:string }> = ({ container, userId}) => {
     const styles = useStyles();
+    const [presence, setPresence] = React.useState<Presence | undefined>(undefined);
+
+
+  React.useEffect(() => {
+    const fetchPresence = async () => {
+        let pre = await getPresence();
+        setPresence(pre);
+
+    };
+    fetchPresence(); 
+    
+    const websocketUrl = `wss://${process.env.REACT_APP_DOMAIN || 'localhost:5000'}`;
+    const socket = new WebSocket(websocketUrl);
+  
+    socket.onmessage = async(event) => {
+      const data = JSON.parse(event.data);
+      console.log("Received WebSocket message:", data);
+      if (data.value && data.value.length > 0) {
+        const notification = data.value[0];
+        const { resource, changeType } = notification;
+        const currentResource   = `communications/presences('${userId}')`;
+        if (resource === currentResource && changeType === 'updated') {
+            await getPresence().then((presence) => {
+              setPresence(presence);
+            });
+        }
+      }
+    };
+
+    socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+    };
+
+    // Cleanup on component unmount
+    return () => {
+        socket.close();
+    };
+  
+  }, []);
+
     const getPresenceIcon = (presence: Presence | undefined) => {
         switch (presence?.availability) {
         case Availability.Available: 
         case 'AvailableIdle':
             return <PresenceAvailable16Filled className={`${styles.available}`} />;
         case Availability.Busy:
+        case 'BusyIdle':
             return <PresenceBusy16Filled className={`${styles.busy}`} />;
         case Availability.DoNotDisturb:
             return <PresenceDnd16Filled className={`${styles.busy}`} />;
@@ -115,64 +157,57 @@ export const PresenceGet: React.FunctionComponent<{ container: string }> = ({ co
         }
     };
 
-    const Messages = (props: MgtTemplateProps) => {
-        const presence = props.dataContext;
-        
-        switch (container) {
-            case "simpleLogin":
-                return (
-                    <Person
-                    personQuery='me'
-                    showPresence={true}
-                    className={styles.simpleLogin}
-                    personPresence={presence}
-                    />
-                );
-            case "flyoutLogin":
+    switch (container) {
+        case "simpleLogin":
             return (
-                <div className={styles.presenceContainer}>
-                    <div className={styles.presenceInfo}>
-                    {getPresenceIcon(presence)}
-                    <span>{presence?.availability}</span>
-                    </div>
-                    <Menu>
-                        <MenuTrigger>
-                        <button className={styles.menuButton}>
-                            <ChevronRight16Filled/>
-                        </button>
-                        </MenuTrigger>
-                        <MenuPopover className={styles.popupContent}>
-                            <MenuList className={styles.menuList}>
-                            <MenuItem onClick={() => handlePresenceClick(Availability.Available)}>
-                                <PresenceAvailable16Filled  className={styles.available}/> Available
-                            </MenuItem>
-                            <MenuItem onClick={() => handlePresenceClick(Availability.Busy)}>
-                                <PresenceBusy16Filled className={styles.busy} /> Busy
-                            </MenuItem>
-                            <MenuItem onClick={() => handlePresenceClick(Availability.DoNotDisturb)}>
-                                <PresenceDnd16Filled className={styles.busy}/> Do not Disturb
-                            </MenuItem>
-                            <MenuItem onClick={() => handlePresenceClick(Availability.BeRightBack)}>
-                                <PresenceAway16Filled className={styles.away}/> Be right back
-                            </MenuItem>
-                            <MenuItem onClick={() => handlePresenceClick(Availability.Away)}>
-                                <PresenceAway16Filled className={styles.away}/> Appear away
-                            </MenuItem>
-                            <MenuItem onClick={() => handlePresenceClick(Availability.Offline)}>
-                                <PresenceOffline16Regular className={styles.offline}/> Appear Offline
-                            </MenuItem>
-                            </MenuList>
-                        </MenuPopover>
-                    </Menu>
-                </div>
+                <Person
+                personQuery='me'
+                showPresence={true}
+                className={styles.simpleLogin}
+                personPresence={presence}
+                />
             );
-            default:
-            return <div></div>
-        }
-    };
+        case "flyoutLogin":
         return (
-        <Get resource='/me/presence' pollingRate={30000}>
-        <Messages template="default"></Messages>
-        </Get>
-        ); 
+            <div className={styles.presenceContainer}>
+                <div className={styles.presenceInfo}>
+                {getPresenceIcon(presence)}
+                <span>{presence?.availability}</span>
+                </div>
+                <Menu>
+                    <MenuTrigger>
+                    <button className={styles.menuButton}>
+                        <ChevronRight16Filled/>
+                    </button>
+                    </MenuTrigger>
+                    <MenuPopover className={styles.popupContent}>
+                        <MenuList className={styles.menuList}>
+                        <MenuItem onClick={() => handlePresenceClick(Availability.Available)}>
+                            <PresenceAvailable16Filled  className={styles.available}/> Available
+                        </MenuItem>
+                        <MenuItem onClick={() => handlePresenceClick(Availability.Busy)}>
+                            <PresenceBusy16Filled className={styles.busy} /> Busy
+                        </MenuItem>
+                        <MenuItem onClick={() => handlePresenceClick(Availability.DoNotDisturb)}>
+                            <PresenceDnd16Filled className={styles.busy}/> Do not Disturb
+                        </MenuItem>
+                        <MenuItem onClick={() => handlePresenceClick(Availability.BeRightBack)}>
+                            <PresenceAway16Filled className={styles.away}/> Be right back
+                        </MenuItem>
+                        <MenuItem onClick={() => handlePresenceClick(Availability.Away)}>
+                            <PresenceAway16Filled className={styles.away}/> Appear away
+                        </MenuItem>
+                        <MenuItem onClick={() => handlePresenceClick(Availability.Offline)}>
+                            <PresenceOffline16Regular className={styles.offline}/> Appear Offline
+                        </MenuItem>
+                        </MenuList>
+                    </MenuPopover>
+                </Menu>
+            </div>
+        );
+        default:
+        return <div></div>
+    }
+
+    
 }

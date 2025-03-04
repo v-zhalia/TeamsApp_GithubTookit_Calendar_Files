@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { Person, MgtTemplateProps} from '@microsoft/mgt-react';
 import { makeStyles} from '@fluentui/react-components';
-import { updatePresence,clearPreferredPresence,getPresence,Availability, Activity } from '../services/graphPresenceService';
 import { PresenceGet } from './PresenceGet';
 
 
@@ -24,18 +23,6 @@ const useStyles = makeStyles({
 export const LoginFlyout: React.FunctionComponent<MgtTemplateProps> = (props) => {
   const styles = useStyles();
   const { personDetails } = props.dataContext;
-  React.useEffect(() => {
-    const loginAndSetPresence = async () => {
-      let pre = await getPresence();
-        if (pre.availability === Availability.Offline || pre.availability === Availability.Away) {
-          await clearPreferredPresence();
-          await updatePresence(Availability.Available, Activity.Available);
-        }
-        else{
-        }
-    };
-    loginAndSetPresence(); // refersh presence on first load
-  }, []);
 
   return (
     <div className={styles.container}>
@@ -45,7 +32,7 @@ export const LoginFlyout: React.FunctionComponent<MgtTemplateProps> = (props) =>
     view={'fourlines'}
     />
     <div className={styles.statusContainer}>
-      <PresenceGet container={"flyoutLogin"}></PresenceGet>
+      <PresenceGet container={"flyoutLogin"} userId={personDetails.id}></PresenceGet>
     </div>
 
   </div>

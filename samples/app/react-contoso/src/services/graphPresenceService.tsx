@@ -77,7 +77,6 @@ export const updatePreferredPresence = async (availability: Availability, activi
       try {
         console.log('updatePreferredPresence to ', availability, activity);
         const graphClient = provider.graph.client;
-        await clearPreferredPresence();
         await graphClient
           .api('/me/presence/setUserPreferredPresence')
           .version('beta') 
@@ -97,6 +96,54 @@ export const updatePreferredPresence = async (availability: Availability, activi
       console.error('User is not signed in');
     }
   };
+
+  export const subscribePresence = async (userId: string) => {
+    const provider = Providers.globalProvider;
+    if (provider && provider.state === ProviderState.SignedIn) {
+      try {
+        const graphClient = provider.graph.client;
+        const notificationUrl =`https://${process.env.REACT_APP_DOMAIN}/resourceNotifications`;
+        
+        // Check if the subscription already exists
+        const existingSubscriptions = await graphClient
+        .api('/subscriptions')
+        .version('beta')
+        .get();
+        const existingSubscription = existingSubscriptions.value.find(
+          (sub: any) => sub.resource === `/communications/presences/${userId}`
+        );
+
+        if (existingSubscription) {
+          console.log('Subscription already exists:', existingSubscription);
+          // await graphClient
+          //           .api(`/subscriptions/${existingSubscription.id}`)
+          //           .version('beta')
+          //           .delete();
+          return;
+        } 
+        // Create a new subscription
+        const subscription = {
+          changeType: "updated",
+          notificationUrl: notificationUrl,
+          resource: `/communications/presences/${userId}`,
+          expirationDateTime: new Date(Date.now() + 3600 * 1000).toISOString(),
+          clientState: "secretClientState"
+        };
+
+        console.log('Subscription payload:', subscription);
+
+        await graphClient
+          .api('/subscriptions')
+          .version('beta')         
+          .post(subscription);
+      } catch (error) {
+        const err = error as any; // Type assertion
+        console.error('Error clearclear presence:', err);
+      }
+    } else {
+      console.error('User is not signed in');
+    }
+  }
 
   export const clearPreferredPresence = async () => {
     const provider = Providers.globalProvider;
